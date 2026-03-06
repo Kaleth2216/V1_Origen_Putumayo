@@ -11,7 +11,6 @@ import CheckoutPage from "./pages/public/checkout/CheckoutPage";
 import Login from "./pages/public/Login";
 import ProductDetail from "./pages/public/ProductDetail";
 import Contacto from "./pages/public/Contacto";
-import DebugPage from "./pages/public/DebugPage";
 
 import { CartProvider } from "./features/cart/CartContext";
 import CartDrawer from "./features/cart/CartDrawer";
@@ -45,8 +44,6 @@ const App: React.FC = () => {
               <Route path="/productos" element={<Products />} />
               <Route path="/productos/:slug" element={<ProductDetail />} />
               <Route path="/checkout" element={<CheckoutPage />} />
-              <Route path="/debug" element={<DebugPage />} />
-
               {/* Admin Route */}
               <Route
                 path="/admin"

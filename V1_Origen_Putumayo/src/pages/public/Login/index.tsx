@@ -1,5 +1,18 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+/**
+ * Login
+ *
+ * Página de autenticación exclusiva para administradores.
+ * No está enlazada desde la navegación pública; solo se accede
+ * al intentar entrar a /admin sin sesión activa.
+ *
+ * Flujo:
+ * - Si ya hay sesión activa → redirige a /admin (admin) o / (no admin).
+ * - Autenticación por email/contraseña o Google OAuth.
+ * - Tras login exitoso → redirige a /admin (AdminRoute decide si tiene acceso).
+ */
+
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabaseClient';
 import { useAuth } from '../../../context/AuthContext';
 import '../../../styles/Login.css';
@@ -10,8 +23,16 @@ const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const { signInWithGoogle } = useAuth();
+    const { user, isAdmin, loading: authLoading, signInWithGoogle } = useAuth();
     const navigate = useNavigate();
+
+    // Si ya hay sesión activa, redirigir según rol
+    useEffect(() => {
+        if (authLoading) return;
+        if (user) {
+            navigate(isAdmin ? '/admin' : '/', { replace: true });
+        }
+    }, [user, isAdmin, authLoading, navigate]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,15 +40,16 @@ const Login: React.FC = () => {
         setError(null);
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { error: signInError } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             });
 
-            if (error) throw error;
-            navigate('/'); // Redirigir al inicio tras login
-        } catch (err: any) {
-            setError(err.message || 'Error al iniciar sesión');
+            if (signInError) throw signInError;
+            navigate('/admin', { replace: true });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Error al iniciar sesión';
+            setError(message);
         } finally {
             setLoading(false);
         }
@@ -36,8 +58,7 @@ const Login: React.FC = () => {
     const handleGoogleLogin = async () => {
         try {
             await signInWithGoogle();
-            // La redirección la maneja Supabase OAuth
-        } catch (err: any) {
+        } catch {
             setError('Error al iniciar con Google');
         }
     };
@@ -45,7 +66,7 @@ const Login: React.FC = () => {
     return (
         <div className="login-container">
             <div className="login-card">
-                <h1 className="login-title">Bienvenido</h1>
+                <h1 className="login-title">Acceso Admin</h1>
                 <p className="login-subtitle">Inicia sesión para continuar</p>
 
                 {error && <div className="login-error">{error}</div>}
@@ -94,11 +115,6 @@ const Login: React.FC = () => {
                     />
                     Google
                 </button>
-
-                <div className="login-footer">
-                    ¿No tienes cuenta?
-                    <Link to="/register" className="login-link">Regístrate aquí</Link>
-                </div>
             </div>
         </div>
     );
