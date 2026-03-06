@@ -5,11 +5,8 @@ import { useCart } from "../../features/cart/CartContext";
 import logo from "../../assets/images/logo1.png";
 import { useState, useEffect, useRef } from "react";
 
-import { useAuth } from "../../context/AuthContext";
-
 const Navbar = () => {
   const { totalItems, openCart } = useCart();
-  const { user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const prevCountRef = useRef<number>(totalItems);
@@ -66,21 +63,6 @@ const Navbar = () => {
 
       {/* Acciones derecha */}
       <div className="navbar-actions">
-        {/* Login / User Info */}
-        {user ? (
-          <div className="navbar-user">
-            <span className="navbar-username">
-              Hola, {user.user_metadata.full_name?.split(" ")[0] || "Usuario"}
-            </span>
-            <button onClick={() => { console.log('Logout clicked'); signOut(); }} className="navbar-logoutBtn" aria-label="Cerrar Sesión">
-              <i className="bi bi-box-arrow-right"></i>
-            </button>
-          </div>
-        ) : (
-          <Link to="/login" className="navbar-loginBtn" aria-label="Iniciar Sesión">
-            <i className="bi bi-person-circle"></i>
-          </Link>
-        )}
 
         {/* Hamburguesa */}
         <button

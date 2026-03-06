@@ -1,7 +1,17 @@
 /**
- * Servicios de administración de productos.
- * Lectura desde la vista products_public.
- * Escritura contra las tablas base: product, product_image, company.
+ * admin.products.service
+ *
+ * Capa de acceso a datos para la gestión de productos desde el panel admin.
+ *
+ * Lectura : vista `products_public` (agrega imágenes y datos de empresa).
+ * Escritura: tablas base `product` y `product_image`.
+ *
+ * Funciones expuestas:
+ * - getAdminProducts()  → lista todos los productos ordenados por nombre.
+ * - getCompanies()      → lista las empresas activas para el selector.
+ * - createProduct()     → inserta producto + imágenes en dos pasos.
+ * - updateProduct()     → actualiza campos del producto y reemplaza imágenes.
+ * - deleteProduct()     → elimina imágenes asociadas y luego el producto.
  */
 
 import { supabase } from "../lib/supabaseClient";
@@ -114,6 +124,13 @@ export const createProduct = async (fields: {
    UPDATE
    ───────────────────────────────────────────── */
 
+interface UpdateProductPayload {
+    name: string;
+    description: string | null;
+    price: number;
+    company_id?: string;
+}
+
 export const updateProduct = async (
     productId: string,
     fields: {
@@ -125,7 +142,7 @@ export const updateProduct = async (
     }
 ): Promise<void> => {
     // 1. Actualizar la tabla product
-    const updatePayload: Record<string, any> = {
+    const updatePayload: UpdateProductPayload = {
         name: fields.name,
         description: fields.description,
         price: fields.price,
@@ -144,13 +161,11 @@ export const updateProduct = async (
     // 2. Actualizar imágenes: borrar existentes y re-insertar todas
     const validUrls = fields.image_urls.filter((url) => url.trim());
     if (validUrls.length > 0) {
-        // Borrar imágenes existentes
         await supabase
             .from("product_image")
             .delete()
             .eq("product_id", productId);
 
-        // Insertar las nuevas
         const imageRows = validUrls.map((url, index) => ({
             product_id: productId,
             url: url.trim(),
@@ -169,7 +184,7 @@ export const updateProduct = async (
    ───────────────────────────────────────────── */
 
 export const deleteProduct = async (productId: string): Promise<void> => {
-    // 1. Borrar imágenes asociadas primero
+    // 1. Borrar imágenes asociadas primero (integridad referencial)
     await supabase
         .from("product_image")
         .delete()

@@ -1,4 +1,17 @@
-// src/pages/admin/Products/index.tsx
+/**
+ * AdminProducts
+ *
+ * Panel de gestión CRUD de productos para administradores.
+ *
+ * Funcionalidades:
+ * - Tabla con listado de todos los productos (imagen, nombre, precio, productor).
+ * - Modal para crear un nuevo producto (nombre, descripción, precio, productor,
+ *   categoría, ubicación, hasta 2 imágenes con previsualización).
+ * - Modal para editar un producto existente.
+ * - Diálogo de confirmación antes de eliminar un producto.
+ *
+ * Fuente de datos: admin.products.service (Supabase).
+ */
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -67,8 +80,9 @@ const AdminProducts: React.FC = () => {
             ]);
             setProducts(prods);
             setCompanies(comps);
-        } catch (err: any) {
-            setError(err.message || "Error cargando datos");
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Error cargando datos";
+            setError(message);
         } finally {
             setLoading(false);
         }
@@ -97,8 +111,8 @@ const AdminProducts: React.FC = () => {
             description: product.description ?? "",
             price: product.price != null ? String(product.price) : "",
             company_id: product.company_id ?? matchedCompany?.company_id ?? "",
-            category: (product as any).category ?? "",
-            location: (product as any).location ?? "",
+            category: product.category ?? "",
+            location: product.location ?? "",
             image_url1: product.images && product.images.length > 0 ? product.images[0] : "",
             image_url2: product.images && product.images.length > 1 ? product.images[1] : "",
         });
@@ -153,8 +167,9 @@ const AdminProducts: React.FC = () => {
 
             handleCloseModal();
             await fetchData();
-        } catch (err: any) {
-            alert("Error guardando producto: " + (err.message || "Error desconocido"));
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Error desconocido";
+            alert("Error guardando producto: " + message);
         } finally {
             setSaving(false);
         }
@@ -167,10 +182,9 @@ const AdminProducts: React.FC = () => {
             await deleteProduct(deleteTarget.product_id);
             setDeleteTarget(null);
             await fetchData();
-        } catch (err: any) {
-            alert(
-                "Error eliminando producto: " + (err.message || "Error desconocido")
-            );
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Error desconocido";
+            alert("Error eliminando producto: " + message);
         }
     };
 

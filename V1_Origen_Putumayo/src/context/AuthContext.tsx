@@ -20,89 +20,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isAdmin, setIsAdmin] = useState(false);
 
     const checkAdminStatus = async (userId: string) => {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-        if (!supabaseUrl || !supabaseKey) {
-            console.error('Missing Supabase configuration');
-            setIsAdmin(false);
-            return;
-        }
-
         try {
-            console.log('Checking admin status (failsafe fetch)...');
-
-            // 1. Setup timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-            // 2. Direct REST API call
-            const response = await fetch(
-                `${supabaseUrl}/rest/v1/admin_users?user_id=eq.${userId}&select=user_id`,
-                {
-                    method: 'GET',
-                    headers: {
-                        'apikey': supabaseKey,
-                        'Authorization': `Bearer ${supabaseKey}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=representation'
-                    },
-                    signal: controller.signal
-                }
+            // El cliente de Supabase envía automáticamente el JWT del usuario,
+            // lo que permite a RLS resolver auth.uid() correctamente.
+            // Se usa Promise.race para evitar que una respuesta lenta bloquee
+            // el estado loading indefinidamente.
+            const timeout = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('timeout')), 5000)
             );
 
-            clearTimeout(timeoutId);
+            const query = supabase
+                .from('admin_users')
+                .select('user_id')
+                .eq('user_id', userId)
+                .maybeSingle();
 
-            if (!response.ok) {
-                console.error('Failsafe admin check failed:', response.status);
-                // Fallback to library if fetch failed (though unlikely if fetch is working)
-                const { data } = await supabase
-                    .from('admin_users')
-                    .select('user_id')
-                    .eq('user_id', userId)
-                    .single();
-                setIsAdmin(!!data);
+            const { data, error } = await Promise.race([query, timeout]);
+
+            if (error) {
+                console.error('Error verificando admin:', error.message);
+                setIsAdmin(false);
                 return;
             }
 
-            const data = await response.json();
-            console.log('Admin status response:', data);
-            setIsAdmin(data && data.length > 0);
-
-        } catch (error: any) {
-            console.error('Error in failsafe checkAdminStatus:', error);
-            // If it's a timeout OR network error, we don't want to hang forever
+            setIsAdmin(!!data);
+        } catch {
             setIsAdmin(false);
         }
     };
 
     useEffect(() => {
-        // Verificar sesión actual
-        const initSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setSession(session);
-            setUser(session?.user ?? null);
-            if (session?.user) {
-                await checkAdminStatus(session.user.id);
-            } else {
-                setIsAdmin(false);
+        // En Supabase v2, onAuthStateChange dispara INITIAL_SESSION al montar,
+        // lo que elimina la necesidad de llamar getSession() por separado.
+        // El try/finally garantiza que loading siempre pase a false.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            try {
+                setSession(session);
+                setUser(session?.user ?? null);
+                if (session?.user) {
+                    await checkAdminStatus(session.user.id);
+                } else {
+                    setIsAdmin(false);
+                }
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
-        };
-
-        initSession();
-
-        // Escuchar cambios de auth
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state changed:', event, session?.user?.email);
-            setSession(session);
-            setUser(session?.user ?? null);
-            if (session?.user) {
-                await checkAdminStatus(session.user.id);
-            } else {
-                setIsAdmin(false);
-            }
-            setLoading(false);
         });
 
         return () => subscription.unsubscribe();
@@ -113,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: window.location.origin,
+                    redirectTo: `${window.location.origin}/admin`,
                 }
             });
             if (error) throw error;
@@ -124,8 +86,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const signOut = async () => {
-        console.log('Signing out (failsafe)...');
-
         // 1. Clear local state immediately
         setUser(null);
         setSession(null);
