@@ -86,24 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const signOut = async () => {
-        // 1. Clear local state immediately
-        setUser(null);
-        setSession(null);
-        setIsAdmin(false);
-
-        // 2. Clear Supabase local storage keys manually (failsafe)
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('sb-')) localStorage.removeItem(key);
-        });
-
-        // 3. Try server sign out (don't let it block URL redirect)
-        try {
-            await supabase.auth.signOut();
-        } catch (error) {
-            console.error('Server sign out failed (ignoring):', error);
-        }
-
-        // 4. Force hard redirect
+        await supabase.auth.signOut();
         window.location.href = '/';
     };
 

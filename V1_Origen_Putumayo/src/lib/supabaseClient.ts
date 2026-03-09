@@ -25,3 +25,14 @@ export const supabase = createClient(
     }
   }
 );
+
+export const supabaseAnon = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    }
+  }
+);

@@ -3,10 +3,10 @@
  * Autor: Kaleth
  */
 
-import { supabase } from "../lib/supabaseClient";
+import { supabaseAnon } from "../lib/supabaseClient";
 
 export const getPublicProducts = async () => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAnon
     .from("products_public")
     .select("*");
 
