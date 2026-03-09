@@ -4,7 +4,7 @@
  * Panel de gestión CRUD de productos para administradores.
  *
  * Funcionalidades:
- * - Tabla con listado de todos los productos (imagen, nombre, precio, productor).
+ * - Sidebar + tabla con búsqueda, filtro por categoría y paginación.
  * - Modal para crear un nuevo producto (nombre, descripción, precio, productor,
  *   categoría, ubicación, hasta 2 imágenes con previsualización).
  * - Modal para editar un producto existente.
@@ -52,6 +52,8 @@ const emptyForm: FormData = {
     image_url2: "",
 };
 
+const PER_PAGE = 10;
+
 /* ─────────────────────────────────────────────
    COMPONENT
    ───────────────────────────────────────────── */
@@ -69,6 +71,11 @@ const AdminProducts: React.FC = () => {
 
     // Delete confirm
     const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
+
+    // Search / filter / pagination
+    const [search, setSearch] = useState("");
+    const [categoryFilter, setCategoryFilter] = useState("Todas");
+    const [page, setPage] = useState(1);
 
     /* ── Fetch products + companies ── */
     const fetchData = useCallback(async () => {
@@ -92,6 +99,21 @@ const AdminProducts: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
+    /* ── Derive unique categories ── */
+    const categories = ["Todas", ...new Set(products.map(p => p.category).filter(Boolean) as string[])];
+
+    /* ── Filtered + paginated data ── */
+    const filtered = products.filter(p =>
+        p.name.toLowerCase().includes(search.toLowerCase()) &&
+        (categoryFilter === "Todas" || p.category === categoryFilter)
+    );
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+    const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+    /* ── Reset page on filter change ── */
+    const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+    const handleCategoryFilter = (val: string) => { setCategoryFilter(val); setPage(1); };
+
     /* ── Open modal for creating ── */
     const handleOpenCreate = () => {
         setEditingId(null);
@@ -102,7 +124,6 @@ const AdminProducts: React.FC = () => {
     /* ── Open modal for editing ── */
     const handleOpenEdit = (product: ProductRow) => {
         setEditingId(product.product_id);
-        // Buscar company_id por nombre (la vista solo devuelve company_name)
         const matchedCompany = companies.find(
             (c) => c.name === product.company_name
         );
@@ -188,97 +209,202 @@ const AdminProducts: React.FC = () => {
         }
     };
 
-    /* ── Format price ── */
-    const fmtPrice = (price: number) =>
-        new Intl.NumberFormat("es-CO", {
-            style: "currency",
-            currency: "COP",
-            maximumFractionDigits: 0,
-        }).format(price);
-
     /* ── Thumb helper ── */
     const getThumb = (p: ProductRow) =>
         p.images && p.images.length > 0 ? p.images[0] : "/home/placeholder.png";
+
+    /* ── Category badge color map (stable, derived from categories list) ── */
+    const categoryColorMap: Record<string, number> = Object.fromEntries(
+        categories.filter(c => c !== "Todas").map((cat, i) => [cat, i % 8])
+    );
+
+    /* ── Pagination helpers ── */
+    const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
+    const startItem = filtered.length === 0 ? 0 : (page - 1) * PER_PAGE + 1;
+    const endItem = Math.min(page * PER_PAGE, filtered.length);
 
     /* ─────────────────────────────────────────────
        RENDER
        ───────────────────────────────────────────── */
     return (
-        <section className="admin-products">
-            {/* Header */}
-            <div className="admin-products__header">
-                <h1 className="admin-products__title">
-                    Gestión de Productos
-                    {!loading && (
-                        <span className="admin-products__count">
-                            ({products.length})
-                        </span>
-                    )}
-                </h1>
-                <button className="admin-products__add-btn" onClick={handleOpenCreate}>
-                    + Agregar Producto
-                </button>
-            </div>
-
-            {/* States */}
-            {loading && (
-                <p className="admin-products__loading">Cargando productos…</p>
-            )}
-            {error && <p className="admin-products__error">⚠ {error}</p>}
-            {!loading && !error && products.length === 0 && (
-                <p className="admin-products__empty">
-                    No hay productos aún. ¡Agrega el primero!
-                </p>
-            )}
-
-            {/* Table */}
-            {!loading && products.length > 0 && (
-                <div className="admin-products__table-wrap">
-                    <table className="admin-products__table">
-                        <thead>
-                            <tr>
-                                <th>Imagen</th>
-                                <th>Nombre</th>
-                                <th>Precio</th>
-                                <th>Productor</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {products.map((p) => (
-                                <tr key={p.product_id}>
-                                    <td>
-                                        <img
-                                            className="admin-products__thumb"
-                                            src={getThumb(p)}
-                                            alt={p.name}
-                                        />
-                                    </td>
-                                    <td className="admin-products__name">{p.name}</td>
-                                    <td>{fmtPrice(p.price)}</td>
-                                    <td>{p.company_name || "—"}</td>
-                                    <td>
-                                        <div className="admin-products__actions">
-                                            <button
-                                                className="admin-products__edit-btn"
-                                                onClick={() => handleOpenEdit(p)}
-                                            >
-                                                ✎ Editar
-                                            </button>
-                                            <button
-                                                className="admin-products__delete-btn"
-                                                onClick={() => setDeleteTarget(p)}
-                                            >
-                                                ✕ Eliminar
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+        <div className="ap-layout">
+            {/* ── Sidebar ── */}
+            <aside className="ap-sidebar">
+                <div className="ap-sidebar__logo">
+                    <div className="ap-sidebar__logo-icon">
+                        <span className="material-symbols-outlined">eco</span>
+                    </div>
+                    <div className="ap-sidebar__logo-text">
+                        <span className="ap-sidebar__logo-name">Origen Putumayo</span>
+                        <span className="ap-sidebar__logo-sub">Admin Panel</span>
+                    </div>
                 </div>
-            )}
+
+                <nav className="ap-sidebar__nav">
+                    <div className="ap-sidebar__section-label">Catálogo</div>
+                    <button className="ap-sidebar__item active">
+                        <span className="material-symbols-outlined">inventory_2</span>
+                        Products
+                        {!loading && (
+                            <span className="ap-sidebar__badge">{products.length}</span>
+                        )}
+                    </button>
+                </nav>
+            </aside>
+
+            {/* ── Main ── */}
+            <main className="ap-main">
+                {/* Header */}
+                <header className="ap-header">
+                    <div className="ap-header__titles">
+                        <h1 className="ap-header__title">Products</h1>
+                        <p className="ap-header__sub">
+                            {loading ? "Cargando…" : `${filtered.length} de ${products.length} productos`}
+                        </p>
+                    </div>
+                    <button className="ap-header__add-btn" onClick={handleOpenCreate}>
+                        <span className="material-symbols-outlined">add_circle</span>
+                        Add Product
+                    </button>
+                </header>
+
+                {/* Content */}
+                <div className="ap-content">
+                    {/* Filters */}
+                    <div className="ap-filters">
+                        <div className="ap-search-wrap">
+                            <span className="material-symbols-outlined">search</span>
+                            <input
+                                className="ap-search"
+                                type="text"
+                                placeholder="Search products…"
+                                value={search}
+                                onChange={e => handleSearch(e.target.value)}
+                            />
+                        </div>
+                        <select
+                            className="ap-filter-select"
+                            value={categoryFilter}
+                            onChange={e => handleCategoryFilter(e.target.value)}
+                        >
+                            {categories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Table */}
+                    <div className="ap-table-wrap">
+                        <table className="ap-table">
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Category</th>
+                                    <th style={{ textAlign: "right" }}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading && (
+                                    <tr className="ap-table__status-row">
+                                        <td colSpan={3}>Cargando productos…</td>
+                                    </tr>
+                                )}
+                                {!loading && error && (
+                                    <tr className="ap-table__status-row ap-table__status-row--error">
+                                        <td colSpan={3}>⚠ {error}</td>
+                                    </tr>
+                                )}
+                                {!loading && !error && filtered.length === 0 && (
+                                    <tr className="ap-table__status-row">
+                                        <td colSpan={3}>
+                                            {search || categoryFilter !== "Todas"
+                                                ? "No hay resultados para esta búsqueda."
+                                                : "No hay productos aún. ¡Agrega el primero!"}
+                                        </td>
+                                    </tr>
+                                )}
+                                {paginated.map((p) => (
+                                    <tr key={p.product_id}>
+                                        <td>
+                                            <div className="ap-product-cell">
+                                                <img
+                                                    className="ap-product-thumb"
+                                                    src={getThumb(p)}
+                                                    alt={p.name}
+                                                />
+                                                <span className="ap-product-name">{p.name}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {p.category ? (
+                                                <span className={`ap-badge ap-badge--${categoryColorMap[p.category] ?? 0}`}>
+                                                    {p.category}
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: "#9ca3af" }}>—</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <div className="ap-actions">
+                                                <button
+                                                    className="ap-btn-icon ap-btn-icon--edit"
+                                                    title="Editar"
+                                                    onClick={() => handleOpenEdit(p)}
+                                                >
+                                                    <span className="material-symbols-outlined">edit</span>
+                                                </button>
+                                                <button
+                                                    className="ap-btn-icon ap-btn-icon--delete"
+                                                    title="Eliminar"
+                                                    onClick={() => setDeleteTarget(p)}
+                                                >
+                                                    <span className="material-symbols-outlined">delete</span>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+
+                        {/* Pagination */}
+                        {!loading && !error && filtered.length > 0 && (
+                            <div className="ap-pagination">
+                                <span className="ap-pagination__info">
+                                    Showing {startItem}–{endItem} of {filtered.length}
+                                </span>
+                                <div className="ap-pagination__controls">
+                                    <button
+                                        className="ap-page-btn"
+                                        disabled={page === 1}
+                                        onClick={() => setPage(p => p - 1)}
+                                        title="Anterior"
+                                    >
+                                        <span className="material-symbols-outlined">chevron_left</span>
+                                    </button>
+                                    {pageNumbers.map(n => (
+                                        <button
+                                            key={n}
+                                            className={`ap-page-btn${page === n ? " ap-page-btn--active" : ""}`}
+                                            onClick={() => setPage(n)}
+                                        >
+                                            {n}
+                                        </button>
+                                    ))}
+                                    <button
+                                        className="ap-page-btn"
+                                        disabled={page === totalPages}
+                                        onClick={() => setPage(p => p + 1)}
+                                        title="Siguiente"
+                                    >
+                                        <span className="material-symbols-outlined">chevron_right</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </main>
 
             {/* ── Create / Edit Modal ── */}
             {modalOpen && (
@@ -466,7 +592,7 @@ const AdminProducts: React.FC = () => {
                     </div>
                 </div>
             )}
-        </section>
+        </div>
     );
 };
 
